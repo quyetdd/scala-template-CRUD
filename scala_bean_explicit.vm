@@ -26,27 +26,27 @@ object $entity.name {
 
     case class ${entity.name}(
 #foreach( $field in $entity.keyAttributes )
-    $field.formattedName(0):#if($field.type=="int")Int #else $field.type #end
+    $field.formattedName(0):#if($field.type=="Integer")Int #else $field.type #end
 #end
 
 #foreach( $field in $entity.nonKeyAttributes )
-   , $field.formattedName(0):#if($field.type=="int")Int #else $field.type #end
+   , $field.formattedName(0):#if($field.type=="Integer")Int #else $field.type #end
     
 #end
 )
-  case class Paging_${entity.name}(obj:$entity.name,total:Long)
+  case class Paging_${entity.name}(obj:List[${entity.name}],total:Long)
 //----------------------------------------------------------------------
 // CRUD
 //----------------------------------------------------------------------
 
 //List
-  def getList(page: Int, record: Int, order: String, sort: String, where: String, operator: String): List[Paging_$entity.name] = {
+  def getList(page: Int, record: Int, order: String, sort: String, where: String): Paging_$entity.name = {
     val outString = ""
     var count=0
-    var list = List[Paging_$entity.name]()
+    var list = List[$entity.name]()
     var where_str=""
-   // if(operator != "")
-   //   where_str = order + operator + where
+     if(where != "")
+      where_str = " where " + where + " " 
     val conn = DB.getConnection()
     try {
 
@@ -64,32 +64,61 @@ object $entity.name {
       while (rs.next()) {
         val pes = new ${entity.name}(
 #foreach( $field in $entity.keyAttributes )
-   #if($field.type=="int")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+   #if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
 #end
 
 #foreach( $field in $entity.nonKeyAttributes )
-    ,#if($field.type=="int")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
     
 #end
 )
-        list = list :+ Paging_${entity.name}(pes,count)
+        list = list :+ pes
 
       }
     } finally {
       conn.close()
     }
 
-    return list
+    return Paging_${entity.name}(list,count)
   }
+
+//List
+  def getOne(id: #foreach( $field in $entity.keyAttributes )#if($field.type=="int")Int#else$field.type#end
+#end): $entity.name = {
+   
+    var one = List[${entity.name}]()
+    val conn = DB.getConnection()
+    try {
+
+      val stmt = conn.createStatement
+ 
+      val rs = stmt.executeQuery("SELECT * from ${entity.name} where #foreach( $field in $entity.keyAttributes )$field.formattedName(0)#end="+id)
+
+      while (rs.next()) {
+        val pes = new ${entity.name}(
+#foreach( $field in $entity.keyAttributes )
+   #if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+#end
+
+#foreach( $field in $entity.nonKeyAttributes )
+    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+    
+#end
+)
+        one = one :+ pes
+
+      }
+    } finally {
+      conn.close()
+    }
+
+    return one.last
+  }
+
 
 //Insert
   def insert(obj:${entity.name}): Boolean = {
-    val outString = ""
-    var count=0
-    var list = List[Paging_$entity.name]()
-    val where_str=""
-   //  if(operator != "")
-   //   where_str = order + operator + where
+    
     val conn = DB.getConnection()
     try {
       val stmt = conn.createStatement
@@ -105,12 +134,8 @@ object $entity.name {
 //Update
   def update(obj:${entity.name}): Boolean = {
     Boolean 
-    val outString = ""
-    var count=0
-    var list = List[Paging_$entity.name]()
-    val where_str=""
-   //  if(operator != "")
-   //   where_str = order + operator + where
+   
+  
     val conn = DB.getConnection()
     try {
       val stmt = conn.createStatement
@@ -129,12 +154,8 @@ object $entity.name {
   def delete(id: #foreach( $field in $entity.keyAttributes )#if($field.type=="int")Int#else$field.type#end
 #end): Boolean = {
     Boolean 
-    val outString = ""
-    var count=0
-    var list = List[Paging_$entity.name]()
-    val where_str=""
-   //  if(operator != "")
-   //   where_str = order + operator + where
+   
+   
     val conn = DB.getConnection()
     try {
       val stmt = conn.createStatement
