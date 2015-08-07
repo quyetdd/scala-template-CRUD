@@ -10,6 +10,9 @@ import play.api.Play.current
 import play.api._
 import play.api.mvc._
 import play.api.db._
+import org.joda.time._
+import org.joda.time.Days
+import org.joda.time.DateTime
 
 #foreach( $import in $java.imports($entity) )
 import $import
@@ -26,15 +29,25 @@ object $entity.name {
 
     case class ${entity.name}(
 #foreach( $field in $entity.keyAttributes )
-    $field.formattedName(0):#if($field.type=="Integer")Int #else $field.type #end
+    var $field.formattedName(0):#if($field.type=="Integer")Int #else $field.type #end
 #end
 
 #foreach( $field in $entity.nonKeyAttributes )
-   , $field.formattedName(0):#if($field.type=="Integer")Int #else $field.type #end
+   , var $field.formattedName(0):#if($field.type=="Integer")Int #else #if($field.type=="Date")DateTime#else$field.type #end#end
     
 #end
 )
   case class Paging_${entity.name}(obj:List[${entity.name}],total:Long)
+
+def instant() : ${entity.name} = {
+    var _instant = new ${entity.name}(
+    0 #foreach( $field in $entity.nonKeyAttributes )
+
+   ,#if($field.type=="Integer"||$field.type=="Long"||$field.type=="Byte"||$field.type=="Double"||$field.type=="Short"||$field.type=="Float")0#else #if($field.type=="Boolean")false #else null#end #end // $field.formattedName(0)  - $field.type
+	#end
+    ) 
+    return _instant
+  }
 //----------------------------------------------------------------------
 // CRUD
 //----------------------------------------------------------------------
@@ -64,11 +77,11 @@ object $entity.name {
       while (rs.next()) {
         val pes = new ${entity.name}(
 #foreach( $field in $entity.keyAttributes )
-   #if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+   #if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else #if($field.type=="Date")new DateTime(rs.get${field.type}("$field.formattedName(0)"))#else rs.get${field.type}("$field.formattedName(0)")#end#end
 #end
 
 #foreach( $field in $entity.nonKeyAttributes )
-    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else#if($field.type=="Date")new DateTime(rs.get${field.type}("$field.formattedName(0)"))#else rs.get${field.type}("$field.formattedName(0)")#end#end
     
 #end
 )
@@ -101,7 +114,7 @@ object $entity.name {
 #end
 
 #foreach( $field in $entity.nonKeyAttributes )
-    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else rs.get${field.type}("$field.formattedName(0)")#end
+    ,#if($field.type=="Integer")rs.getInt("$field.formattedName(0)") #else#if($field.type=="Date")new DateTime(rs.get${field.type}("$field.formattedName(0)"))#else rs.get${field.type}("$field.formattedName(0)")#end#end
     
 #end
 )
@@ -122,8 +135,11 @@ object $entity.name {
     val conn = DB.getConnection()
     try {
       val stmt = conn.createStatement
-      val sql="Insert into ${entity.name}(#foreach( $field in $entity.keyAttributes )$field.formattedName(0)#end #foreach( $field in $entity.nonKeyAttributes ),$field.formattedName(0)#end) values ("#foreach( $field in $entity.keyAttributes ) +obj.$field.formattedName(0)+"#end #foreach( $field in $entity.nonKeyAttributes ),"+obj.$field.formattedName(0)+"#end)"
-      val rs_count = stmt.executeQuery(sql)
+      val sql="Insert into ${entity.name}(#foreach( $field in $entity.keyAttributes )$field.formattedName(0)#end #foreach( $field in $entity.nonKeyAttributes ),$field.formattedName(0)#end) values (NULL#foreach( $field in $entity.nonKeyAttributes ),#if($field.type=="Integer"||$field.type=="Long"||$field.type=="Byte"||$field.type=="Double"||$field.type=="Short"||$field.type=="Float")"+obj.$field.formattedName(0)+"#else#if($field.type=="Date")STR_TO_DATE(SUBSTRING('"+obj.$field.formattedName(0)+"',1,19),'%Y-%m-%dT%H:%i:%s') #else'"+obj.$field.formattedName(0)+"'#end#end#end)"
+
+println(sql)   
+   
+val rs_count = stmt.executeUpdate(sql)
               return true;
     }catch {
       case t: Throwable =>false // TODO: handle error
@@ -139,9 +155,11 @@ object $entity.name {
     val conn = DB.getConnection()
     try {
       val stmt = conn.createStatement
-      val sql="Update ${entity.name} set #foreach($field in $entity.nonKeyAttributes )$field.formattedName(0)="+obj.$field.formattedName(0)+", #end where #foreach( $field in $entity.keyAttributes )$field.formattedName(0)="+obj.$field.formattedName(0)#end
+      val sql="Update ${entity.name} set #foreach( $field in $entity.keyAttributes )$field.formattedName(0)="+obj.$field.formattedName(0)+"#end#foreach($field in $entity.nonKeyAttributes ),$field.formattedName(0)=#if($field.type=="Integer"||$field.type=="Long"||$field.type=="Byte"||$field.type=="Double"||$field.type=="Short"||$field.type=="Float")"+obj.$field.formattedName(0)+"#else#if($field.type=="Date")STR_TO_DATE(SUBSTRING('"+obj.$field.formattedName(0)+"',1,19),'%Y-%m-%dT%H:%i:%s') #else'"+obj.$field.formattedName(0)+"'#end#end#end where #foreach( $field in $entity.keyAttributes )$field.formattedName(0)="+obj.$field.formattedName(0)#end
 
-      val rs_count = stmt.executeQuery(sql)
+println(sql)
+
+      val rs_count = stmt.executeUpdate(sql)
      
         return true;
     }catch {
@@ -160,7 +178,8 @@ object $entity.name {
     try {
       val stmt = conn.createStatement
       val sql="Delete from ${entity.name} where #foreach( $field in $entity.keyAttributes )$field.formattedName(0)#end="+id
-      val rs_count = stmt.executeQuery(sql)
+println(sql)
+      val rs_count = stmt.executeUpdate(sql)
         return true;
     }catch {
       case t: Throwable =>false // TODO: handle error
